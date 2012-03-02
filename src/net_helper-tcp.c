@@ -41,7 +41,7 @@ struct nodeID *nodeid_dup (struct nodeID *s)
     nodeid_t *ret = malloc(sizeof(nodeid_t));
 
     if (ret == NULL) return NULL;
-    memcpy(ret, s, sizeof(nodeid_t));
+    memcpy(ret, s, sizeof(nodeid_dup));
     return ret;
 }
 
