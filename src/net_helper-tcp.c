@@ -49,6 +49,7 @@ static void print_err (int e, const char *msg);
 static int get_peer (dict_t neighbours, struct sockaddr_in *addr);
 static int would_block (int e);
 static int dead_filedescriptor (int e);
+static nodeid_t * addr_to_nodeid (const struct sockaddr_in *addr);
 
 /* -- Constants ------------------------------------------------------ */
 
@@ -244,6 +245,11 @@ int recv_from_peer(const struct nodeID *self, struct nodeID **remote,
                         peer, &err) == -1) {
             print_err(err, "recv select");
         }
+    }
+
+    if ((*remote = addr_to_nodeid((const struct sockaddr_in *)peer->addr))
+            == NULL) {
+        return -1;
     }
 
     retval = buffer_size;
@@ -452,4 +458,22 @@ int dead_filedescriptor (int e)
            e == ENOTCONN;
 }
 
+static
+nodeid_t * addr_to_nodeid (const struct sockaddr_in *addr)
+{
+    nodeid_t *ret;
+
+    ret = malloc(sizeof(nodeid_t));
+    if (ret == NULL) return NULL;
+
+    ret->local = NULL;
+    memcpy((void *)&ret->addr, (const void *)addr,
+           sizeof(struct sockaddr_in));
+    inet_ntop(AF_INET, (const void *)&ret->addr.sin_addr,
+              ret->repr.ip, INET_ADDRSTRLEN);
+    sprintf(ret->repr.ip_port, "%s:%hu", ret->repr.ip,
+            addr->sin_port);
+
+    return ret;
+}
 
