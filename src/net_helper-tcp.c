@@ -68,10 +68,12 @@ struct nodeID *nodeid_dup (struct nodeID *s)
 
     /* Local nodeID cannot be duplicated! */
     assert(s->local == NULL);
-    ret = malloc(sizeof(nodeid_t));
 
+    ret = malloc(sizeof(nodeid_t));
     if (ret == NULL) return NULL;
     memcpy(ret, s, sizeof(nodeid_t));
+    ret->local = NULL;
+
     return ret;
 }
 
