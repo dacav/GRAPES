@@ -104,12 +104,12 @@ int fair_select(dict_t neighbours, struct timeval *timeout,
                 fd_set *fdset, int maxfd, connection_t *conn, int *e)
 {
     int ret;
+    struct pick_fair_data pfd;
+    struct fill_fd_set_data ffsd;
 
-    struct fill_fd_set_data ffsd = {
-        .readfds = fdset,
-        .maxfd = maxfd - 1,
-        .count_unused = 0
-    };
+    ffsd.readfds = fdset;
+    ffsd.maxfd = maxfd - 1;
+    ffsd.count_unused = 0;
 
     dict_scan(neighbours, scan_fill_fd_set, (void *) &ffsd);
     ret = select(ffsd.maxfd + 1, fdset, NULL, NULL, timeout);
@@ -119,14 +119,12 @@ int fair_select(dict_t neighbours, struct timeval *timeout,
         return ret;
     }
 
-    struct pick_fair_data pfd = {
-        .readfds = fdset,
-        .flags = {
-            .flip = !ffsd.count_unused,
-            .backup = 0
-        }
-    };
-    pfd.result->fd = -1;
+    pfd.readfds = fdset,
+    pfd.flags.flip = !ffsd.count_unused;
+    pfd.flags.backup = 0;
+    pfd.result = conn;
+    conn->fd = -1;
+
     dict_scan(neighbours, scan_pick_fair, (void *) &pfd);
 
     return 1;
