@@ -22,6 +22,9 @@
 #include "NetHelper/fair.h"
 #include "NetHelper/dictionary.h"
 
+// FIXME : remove
+#include <stdio.h>
+
 /* -- Internal data types -------------------------------------------- */
 
 typedef struct {
@@ -112,7 +115,7 @@ struct nodeID *create_node (const char *IPaddr, int port)
                   ret->repr.ip, INET_ADDRSTRLEN);
     } else {
         if (inet_pton(AF_INET, IPaddr,
-                         (void *)&ret->addr.sin_addr) == 0) {
+                      (void *)&ret->addr.sin_addr) == 0) {
             fprintf(stderr, "Invalid ip address %s\n", IPaddr);
             free(ret);
             return NULL;
@@ -338,7 +341,7 @@ struct nodeID *nodeid_undump (const uint8_t *b, int *len)
     inet_ntop(AF_INET, (const void *)b, ret->repr.ip,
               sizeof(struct sockaddr_in));
     sprintf(ret->repr.ip_port, "%s:%hu", ret->repr.ip,
-            ret->addr.sin_port);
+            ntohs(ret->addr.sin_port));
     ret->local = NULL;
 
     return ret;
@@ -371,8 +374,9 @@ const char *node_addr (const struct nodeID *s)
 static
 int tcp_connect (struct sockaddr_in *to, int *out_fd, int *e)
 {
-    int fd = socket(AF_INET, SOCK_STREAM, 0);
+    int fd;
 
+    fd = socket(AF_INET, SOCK_STREAM, 0);
     if (fd == -1) {
         if (e) *e = errno;
         return -1;
@@ -437,12 +441,13 @@ int get_peer (dict_t neighbours, struct sockaddr_in *addr)
 {
     peer_info_t peer;
 
-    if (dict_lookup(neighbours, (struct sockaddr *) addr, &peer) == -1) {
+    if (dict_lookup(neighbours, (const struct sockaddr *) addr,
+                    &peer) == -1) {
         /* We don't have the address stored, thus we need to connect */
 
         int err;
-        if (tcp_connect((struct sockaddr_in *)&addr, &peer.fd,
-                        &err) == -1) {
+
+        if (tcp_connect(addr, &peer.fd, &err) < 0) {
             print_err(err, "connecting to peer");
             return -1;
         }
@@ -482,7 +487,7 @@ nodeid_t * addr_to_nodeid (const struct sockaddr_in *addr)
     inet_ntop(AF_INET, (const void *)&ret->addr.sin_addr,
               ret->repr.ip, INET_ADDRSTRLEN);
     sprintf(ret->repr.ip_port, "%s:%hu", ret->repr.ip,
-            addr->sin_port);
+            ntohs(addr->sin_port));
 
     return ret;
 }
