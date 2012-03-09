@@ -102,16 +102,18 @@ struct nodeID *create_node (const char *IPaddr, int port)
         /* In case of server, specifying NULL will allow anyone to
          * connect. */
         ret->addr.sin_addr.s_addr = INADDR_ANY;
-    } else if (inet_pton(AF_INET, IPaddr,
+        inet_ntop(AF_INET, (const void *)&ret->addr.sin_addr,
+                  ret->repr.ip, INET_ADDRSTRLEN);
+    } else {
+        if (inet_pton(AF_INET, IPaddr,
                          (void *)&ret->addr.sin_addr) == 0) {
-        fprintf(stderr, "Invalid ip address %s\n", IPaddr);
-        free(ret);
-        return NULL;
+            fprintf(stderr, "Invalid ip address %s\n", IPaddr);
+            free(ret);
+            return NULL;
+        }
+        strcpy(ret->repr.ip, IPaddr);
     }
-
-    /* Representations */
-    strcpy(ret->repr.ip, IPaddr);
-    sprintf(ret->repr.ip_port, "%s:%hu", IPaddr, (uint16_t)port);
+    sprintf(ret->repr.ip_port, "%s:%hu", ret->repr.ip, (uint16_t)port);
 
     return ret;
 }
