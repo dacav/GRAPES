@@ -22,6 +22,14 @@ ifneq ($(ARCH),win32)
            chunkiser_test
 endif
 
+NH_TCP_PARTS := $(wildcard ../NetHelper/*.c)
+ifeq ($(NH_INCARNATION),-tcp)
+	NH=../net_helper-tcp.o $(NH_TCP_PARTS:.c=.o)
+	LDLIBS += -ldacav
+else
+	NH=../net_helper.o
+endif
+
 CPPFLAGS = -I$(BASE)/include
 
 LDFLAGS += -L..
@@ -36,13 +44,13 @@ ifeq ($(ARCH),win32)
 LDLIBS += -lws2_32
 endif
 
-topo_msg_size_test: ../net_helper$(NH_INCARNATION).o
+topo_msg_size_test: $(NH)
 
 topology_test_attr: topology_test_attr.o net_helpers.o
-topology_test_attr: ../net_helper$(NH_INCARNATION).o
+topology_test_attr: $(NH)
 
 topology_test: topology_test.o net_helpers.o
-topology_test: ../net_helper$(NH_INCARNATION).o
+topology_test: $(NH)
 
 topology_test_th: topology_test_th.o net_helpers.o
 topology_test_th: ../net_helper.o
@@ -58,16 +66,16 @@ chunkidset_test: chunkidset_test.o chunkid_set_h.o
 chunkidset_test_bug: chunkidset_test_bug.o chunkid_set_h.o
 
 chunk_sending_test: chunk_sending_test.o net_helpers.o
-chunk_sending_test: ../net_helper$(NH_INCARNATION).o
+chunk_sending_test: $(NH)
 
 chunk_signaling_test: chunk_signaling_test.o net_helpers.o chunkid_set_h.o
-chunk_signaling_test: ../net_helper$(NH_INCARNATION).o
+chunk_signaling_test: $(NH)
 
 tman_test: tman_test.o topology.o peer.o net_helpers.o
-tman_test: ../net_helper$(NH_INCARNATION).o
+tman_test: $(NH)
 
 chunkiser_test: chunkiser_test.o
-chunkiser_test: ../net_helper$(NH_INCARNATION).o
+chunkiser_test: $(NH)
 ifdef FFDIR
 chunkiser_test: CFLAGS += -pthread
 chunkiser_test: LDFLAGS += -pthread -L$(FFDIR)/libavutil -L$(FFDIR)/libavcore -L$(FFDIR)/libavcodec -L$(FFDIR)/libavformat

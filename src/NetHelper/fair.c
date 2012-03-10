@@ -107,6 +107,11 @@ int fair_select(dict_t neighbours, struct timeval *timeout,
     struct pick_fair_data pfd;
     struct fill_fd_set_data ffsd;
 
+    if (dict_size(neighbours) == 0) {
+        /* If we have no neighbors, just behave as a normal select */
+        return select(maxfd, fdset, NULL, NULL, timeout);
+    }
+
     ffsd.readfds = fdset;
     ffsd.maxfd = maxfd - 1;
     ffsd.count_unused = 0;
