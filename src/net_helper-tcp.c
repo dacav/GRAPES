@@ -282,20 +282,21 @@ int recv_from_peer(const struct nodeID *self, struct nodeID **remote,
         return -1;
     }
 
-    retval = buffer_size;
-    while (retval > 0 && buffer_size > 0) {
+    retval = 0;
+    while (buffer_size > 0) {
         ssize_t n;
 
         switch (n = recv(peer->fd, buffer_ptr, buffer_size, 0)) {
             case -1:
                 print_err(errno, "receiving");
             case 0:
+                buffer_size = 0;
                 dict_remove(local->neighbours, peer->addr);
-                retval = -1;
                 break;
             default:
                 buffer_size -= n;
                 buffer_ptr += n;
+                retval += n;
         }
     }
 
