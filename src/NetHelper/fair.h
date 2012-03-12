@@ -29,8 +29,8 @@
  * @param[in] timeout The timeout (or NULL for indefinte waiting);
  * @param[in] fdset A pre-initialized (and possibly non-empty) set of file
  *            descriptors to be analyzed;
- * @param[in] maxfd The maximum file descriptor in the set + 1 (or 0 if
- *            fdset is empty);
+ * @param[in] nfds The maximum file descriptor in the set + 1 (or 0 if
+ *                 fdset is empty);
  * @param[out] conn The found connection (may be invalid: conn->fd == -1);
  * @param[out] e Pointer where errno will be stored in case of select(2)
  *               failure (you may pass NULL).
@@ -45,7 +45,7 @@
  *
  */
 int fair_select(dict_t neighbours, struct timeval *timeout,
-                fd_set *fdset, int maxfd, connection_t *conn, int *e);
+                fd_set *fdset, int nfds, connection_t *conn, int *e);
 
 #endif // FAIR_H
 

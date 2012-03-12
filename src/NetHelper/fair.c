@@ -101,7 +101,7 @@ dict_scanact_t scan_pick_fair (void *ctx, const struct sockaddr *addr,
 }
 
 int fair_select(dict_t neighbours, struct timeval *timeout,
-                fd_set *fdset, int maxfd, connection_t *conn, int *e)
+                fd_set *fdset, int nfds, connection_t *conn, int *e)
 {
     int ret;
     struct pick_fair_data pfd;
@@ -109,11 +109,11 @@ int fair_select(dict_t neighbours, struct timeval *timeout,
 
     if (dict_size(neighbours) == 0) {
         /* If we have no neighbors, just behave as a normal select */
-        return select(maxfd, fdset, NULL, NULL, timeout);
+        return select(nfds, fdset, NULL, NULL, timeout);
     }
 
     ffsd.readfds = fdset;
-    ffsd.maxfd = maxfd - 1;
+    ffsd.maxfd = nfds - 1;
     ffsd.count_unused = 0;
 
     dict_scan(neighbours, scan_fill_fd_set, (void *) &ffsd);
