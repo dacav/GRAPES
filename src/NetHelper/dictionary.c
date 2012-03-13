@@ -97,6 +97,7 @@ dict_t dict_new (int af, int autoclose, struct tag *cfg_tags)
     peer_info_cprm.rm = autoclose ? peer_info_free : free;
     ret->ht = dhash_new(nbks, sockaddr_hash, sockaddr_cmp,
                         &addr_cprm, &peer_info_cprm);
+    ret->count = 0;
     return ret;
 }
 

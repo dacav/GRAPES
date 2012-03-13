@@ -114,6 +114,8 @@ int main(int argc, char *argv[])
     /* TODO: Error check! */
     if (buff[0] != MSG_TYPE_CHUNK) {
       fprintf(stderr, "Wrong message type!!!\n");
+      nodeid_free(remote);
+      nodeid_free(my_sock);
 
       return -1;
     }

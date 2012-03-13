@@ -142,12 +142,10 @@ void nodeid_free (struct nodeID *s)
 {
     local_info_t *local = s->local;
     if (local != NULL) {
-        if (local->refcount == 0) {
+        if (-- local->refcount == 0) {
             dict_delete(local->neighbours);
             close(local->fd);
             free(local);
-        } else {
-            local->refcount --;
         }
     }
     free(s);
@@ -190,6 +188,9 @@ struct nodeID * net_helper_init (const char *IPaddr, int port,
                                  DEFAULT_SENDRETRY);
     }
     local->neighbours = dict_new(AF_INET, 1, cfg_tags);
+    local->cached_peer.fd = -1;
+    local->refcount = 1;
+
     free(cfg_tags);
 
     if (tcp_serve(self, backlog, &e) < 0) {
@@ -197,10 +198,6 @@ struct nodeID * net_helper_init (const char *IPaddr, int port,
         nodeid_free(self);
         return NULL;
     }
-
-    /* Remaining part of the initialization: */
-    local->cached_peer.fd = -1;
-    local->refcount = 1;
 
     return self;
 }
