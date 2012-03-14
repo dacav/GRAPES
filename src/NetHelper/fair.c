@@ -72,7 +72,7 @@ dict_scanact_t scan_pick_fair (void *ctx, const struct sockaddr *addr,
 
     } else {
 
-        /* In non-flipped logick we are searching for a non-used node. If
+        /* In non-flipped logic we are searching for a non-used node. If
          * we find it we stop and we are ok. However we may not find it,
          * so we also search in the used ones as backup plan */
 
@@ -84,7 +84,6 @@ dict_scanact_t scan_pick_fair (void *ctx, const struct sockaddr *addr,
                 result->fd = info->fd;
                 result->addr = addr;
             }
-            return DICT_SCAN_CONTINUE;
 
         } else {
 
@@ -92,10 +91,12 @@ dict_scanact_t scan_pick_fair (void *ctx, const struct sockaddr *addr,
                 /* We found our never-used peer */
                 result->fd = info->fd;
                 result->addr = addr;
+                return DICT_SCAN_STOP;
             }
-            return DICT_SCAN_STOP;
 
         }
+
+        return DICT_SCAN_CONTINUE;
 
     }
 }

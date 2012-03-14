@@ -77,8 +77,8 @@ size_t dict_size (dict_t D);
  * @retval 0 on success;
  * @retval -1 on failure.
  */
-int dict_lookup (dict_t D, const struct sockaddr * addr,
-                 peer_info_t *info);
+int dict_lookup (dict_t D, const struct sockaddr *addr,
+                 peer_info_t **info);
 
 /** Lookup function.
  *

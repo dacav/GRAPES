@@ -112,10 +112,10 @@ size_t dict_size (dict_t D)
     return D->count;
 }
 
-int dict_lookup (dict_t D, const struct sockaddr * addr,
-                 peer_info_t *info)
+int dict_lookup (dict_t D, const struct sockaddr *addr,
+                 peer_info_t **info)
 {
-    return dhash_search(D->ht, (const void *)addr, (void *)&info)
+    return dhash_search(D->ht, (const void *)addr, (void **)info)
            == DHASH_FOUND ? 0 : -1;
 }
 
@@ -145,7 +145,7 @@ void dict_lookup_default (dict_t D, const struct sockaddr *addr,
         .make_socket = make_socket,
         .ctx = ctx
     };
-    dhash_search_default(D->ht, (const void *)addr, (void *)&info,
+    dhash_search_default(D->ht, (const void *)addr, (void **)&info,
                          build_peer_info, (void *) &ld);
 }
 

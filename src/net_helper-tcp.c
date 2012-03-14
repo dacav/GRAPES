@@ -274,6 +274,8 @@ int recv_from_peer(const struct nodeID *self, struct nodeID **remote,
         }
     }
 
+    assert(peer->fd != -1);
+
     if ((*remote = addr_to_nodeid((const struct sockaddr_in *)peer->addr))
             == NULL) {
         return -1;
@@ -505,23 +507,23 @@ void print_err (int e, const char *msg)
 static
 int get_peer (dict_t neighbours, struct sockaddr_in *addr)
 {
-    peer_info_t peer;
+    peer_info_t *peer;
 
     if (dict_lookup(neighbours, (const struct sockaddr *) addr,
-                    &peer) == -1) {
+                    &peer) == 0) {
+        return peer->fd;
+    } else {
         /* We don't have the address stored, thus we need to connect */
+        int err, fd;
 
-        int err;
-
-        if (tcp_connect(addr, &peer.fd, &err) < 0) {
+        if (tcp_connect(addr, &fd, &err) < 0) {
             print_err(err, "connecting to peer");
             return -1;
         }
+        dict_insert(neighbours, (struct sockaddr *) addr, fd);
 
-        dict_insert(neighbours, (struct sockaddr *) addr, peer.fd);
+        return fd;
     }
-
-    return peer.fd;
 }
 
 static inline
