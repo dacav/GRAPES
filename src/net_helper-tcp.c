@@ -47,16 +47,16 @@ typedef struct nodeID {
 
 /* -- Internal functions --------------------------------------------- */
 
-static int tcp_connect (struct sockaddr_in *to, int *out_fd, int *e);
-static int tcp_serve (nodeid_t *sd, int backlog, int *e);
-static int tcp_accept_queue (const nodeid_t *sd, int *e);
+static int tcp_connect (struct sockaddr_in *to, int *out_fd);
+static int tcp_serve (nodeid_t *sd, int backlog);
+static int tcp_accept_queue (const nodeid_t *sd);
 static void print_err (int e, const char *msg);
 static int get_peer (dict_t neighbours, struct sockaddr_in *addr);
 static inline int would_block (int e);
 static inline int dead_filedescriptor (int e);
 static nodeid_t * addr_to_nodeid (const struct sockaddr_in *addr);
 static int wait_incoming (const nodeid_t *self, struct timeval *tout,
-                          fd_set *S, int nfds, int *e);
+                          fd_set *S, int nfds);
 
 /* -- Constants ------------------------------------------------------ */
 
@@ -157,7 +157,6 @@ struct nodeID * net_helper_init (const char *IPaddr, int port,
     nodeid_t *self;
     struct tag *cfg_tags;
     int backlog;
-    int e;
     local_info_t *local;
 
     self = create_node(IPaddr, port);
@@ -193,8 +192,7 @@ struct nodeID * net_helper_init (const char *IPaddr, int port,
 
     free(cfg_tags);
 
-    if (tcp_serve(self, backlog, &e) < 0) {
-        print_err(e, "creating server");
+    if (tcp_serve(self, backlog) < 0) {
         nodeid_free(self);
         return NULL;
     }
@@ -212,7 +210,6 @@ int send_to_peer(const struct nodeID *self, struct nodeID *to,
     ssize_t sent;
     int peer_fd;
     local_info_t *local;
-    int e;
 
     if (buffer_size <= 0) {
         return 0;
@@ -222,8 +219,8 @@ int send_to_peer(const struct nodeID *self, struct nodeID *to,
     assert(local != NULL);          // TODO: remove after testing
     assert(to->local == NULL);      // TODO: ditto
 
-    if (tcp_accept_queue(self, &e) == -1) {
-        print_err(e, "send_to_peer, getting connections");
+    if (tcp_accept_queue(self) == -1) {
+        return -1;
     }
     peer_fd = get_peer(local->neighbours, &to->addr);
     if (peer_fd == -1) {
@@ -263,13 +260,11 @@ int recv_from_peer(const struct nodeID *self, struct nodeID **remote,
     local = self->local;
     peer = &local->cached_peer;
     if (peer->fd == -1) {
-        int err;
         fd_set fds;
 
         /* No cache from wait4data */
         FD_ZERO(&fds);
-        if (wait_incoming(self, NULL, &fds, 0, &err) == -1) {
-            print_err(err, "recv_from_peer, waiting");
+        if (wait_incoming(self, NULL, &fds, 0) == -1) {
             return -1;
         }
     }
@@ -307,7 +302,6 @@ int wait4data(const struct nodeID *self, struct timeval *tout,
               int *user_fds)
 {
     fd_set fdset;
-    int err;
     int i;
     int maxfd;
 
@@ -324,9 +318,7 @@ int wait4data(const struct nodeID *self, struct timeval *tout,
         }
     }
 
-    if (wait_incoming(self, tout, &fdset, maxfd + 1, &err)
-            == -1) {
-        print_err(err, "wait4data, waiting");
+    if (wait_incoming(self, tout, &fdset, maxfd + 1) == -1) {
         return -1;
     }
 
@@ -386,19 +378,19 @@ const char *node_addr (const struct nodeID *s)
 /* -- Internal functions --------------------------------------------- */
 
 static
-int tcp_connect (struct sockaddr_in *to, int *out_fd, int *e)
+int tcp_connect (struct sockaddr_in *to, int *out_fd)
 {
     int fd;
 
     fd = socket(AF_INET, SOCK_STREAM, 0);
     if (fd == -1) {
-        if (e) *e = errno;
+        print_err(errno, "outgoing, creating socket");
         return -1;
     }
 
     if (connect(fd, (struct sockaddr *)to,
                 sizeof(struct sockaddr_in)) == -1) {
-        if (e) *e = errno;
+        print_err(errno, "outgoing, connect");
         close(fd);
         return -2;
     }
@@ -408,26 +400,26 @@ int tcp_connect (struct sockaddr_in *to, int *out_fd, int *e)
 }
 
 static
-int tcp_serve (nodeid_t *sd, int backlog, int *e)
+int tcp_serve (nodeid_t *sd, int backlog)
 {
     int fd;
     assert(sd->local != NULL);  // TODO: remove when it works.
 
     fd = socket(AF_INET, SOCK_STREAM, 0);
     if (fd == -1) {
-        if (e) *e = errno;
+        print_err(errno, "serving, creating socket");
         return -1;
     }
 
     if (bind(fd, (struct sockaddr *) &sd->addr,
              sizeof(struct sockaddr_in))) {
-        if (e) *e = errno;
+        print_err(errno, "serving, binding socket");
         close(fd);
         return -2;
     }
 
     if (listen(fd, backlog) == -1) {
-        if (e) *e = errno;
+        print_err(errno, "serving, listening");
         close(fd);
         return -3;
     }
@@ -437,7 +429,7 @@ int tcp_serve (nodeid_t *sd, int backlog, int *e)
 }
 
 static
-int tcp_accept_queue (const nodeid_t *sd, int *e)
+int tcp_accept_queue (const nodeid_t *sd)
 {
     /* TODO: a possible optimization would be avoiding the first select if
      * we already know there's a connection waiting in the backlog queue.
@@ -463,7 +455,7 @@ int tcp_accept_queue (const nodeid_t *sd, int *e)
 
             case -1:
                 /* Error. */
-                if (e) *e = errno;
+                print_err(errno, "accept queue, select");
                 return -1;
 
             case 0:
@@ -479,7 +471,7 @@ int tcp_accept_queue (const nodeid_t *sd, int *e)
                 clifd = accept(servfd, (struct sockaddr *)&incoming,
                                &len);
                 if (clifd == -1) {
-                    print_err(errno, "accepting");
+                    print_err(errno, "accept queue, accept");
                     return -1;
                 }
                 dict_insert(sd->local->neighbours,
@@ -514,10 +506,9 @@ int get_peer (dict_t neighbours, struct sockaddr_in *addr)
         return peer->fd;
     } else {
         /* We don't have the address stored, thus we need to connect */
-        int err, fd;
+        int fd;
 
-        if (tcp_connect(addr, &fd, &err) < 0) {
-            print_err(err, "connecting to peer");
+        if (tcp_connect(addr, &fd) < 0) {
             return -1;
         }
         dict_insert(neighbours, (struct sockaddr *) addr, fd);
@@ -562,7 +553,7 @@ nodeid_t * addr_to_nodeid (const struct sockaddr_in *addr)
 
 static
 int wait_incoming (const nodeid_t *self, struct timeval *tout, fd_set *S,
-                   int nfds, int *e)
+                   int nfds)
 {
     int was_accept;
     local_info_t *local;
@@ -577,11 +568,10 @@ int wait_incoming (const nodeid_t *self, struct timeval *tout, fd_set *S,
     do {
         was_accept = 0;
         switch (fair_select(local->neighbours, tout, S, nfds + 1,
-                            &local->cached_peer, e)) {
+                            &local->cached_peer, &err)) {
 
             case -1:
-                /* Error. `e` output parameter already set by
-                 * `fair_select`. */
+                print_err(err, "fair selection");
                 return -1;
 
             case 0:
@@ -592,7 +582,7 @@ int wait_incoming (const nodeid_t *self, struct timeval *tout, fd_set *S,
 
         if (FD_ISSET(local->fd, S)) {
             /* We have some new incoming connection. */
-            if (tcp_accept_queue(self, e) == -1) {
+            if (tcp_accept_queue(self) == -1) {
                 return -1;
             }
             was_accept = 1;
