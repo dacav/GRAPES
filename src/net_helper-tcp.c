@@ -318,21 +318,24 @@ int wait4data(const struct nodeID *self, struct timeval *tout,
         }
     }
 
-    if (wait_incoming(self, tout, &fdset, maxfd + 1) == -1) {
-        return -1;
-    }
-
-    if (user_fds && self->local->cached_peer.fd == -1) {
-        /* Update externally provided file descriptors as
-         * expected by outside algorithms */
-        for (i = 0; user_fds[i] != -1; i++) {
-            if (!FD_ISSET(user_fds[i], &fdset)) {
-                user_fds[i] = -2;
+    switch (wait_incoming(self, tout, &fdset, maxfd + 1)) {
+        case -1:
+            return -1;
+        case 0:
+            return 0;
+        default:
+            if (user_fds && self->local->cached_peer.fd == -1) {
+                /* Update externally provided file descriptors as
+                 * expected by outside algorithms */
+                for (i = 0; user_fds[i] != -1; i++) {
+                    if (!FD_ISSET(user_fds[i], &fdset)) {
+                        user_fds[i] = -2;
+                    }
+                }
+                return 2;
             }
-        }
-        return 2;
+            return 1;
     }
-    return 1;
 }
 
 struct nodeID *nodeid_undump (const uint8_t *b, int *len)
@@ -589,5 +592,5 @@ int wait_incoming (const nodeid_t *self, struct timeval *tout, fd_set *S,
         }
     } while (was_accept);
 
-    return 0;
+    return 1;
 }
