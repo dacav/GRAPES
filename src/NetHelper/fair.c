@@ -8,6 +8,7 @@
 #include "fair.h"
 
 #include <errno.h>
+#include <fcntl.h>
 
 struct fill_fd_set_data {
     fd_set *readfds;
@@ -24,6 +25,11 @@ dict_scanact_t scan_fill_fd_set (void *ctx, const struct sockaddr *addr,
      * (used by select(2)) and count how much file descriptors have never
      * been used */
     struct fill_fd_set_data *ffsd = ctx;
+
+    if (fcntl(info->fd, F_GETFL) == -1) {
+        /* File descriptor is dead, just remove it */
+        return DICT_SCAN_DEL_CONTINUE;
+    }
 
     FD_SET(info->fd, ffsd->readfds);
     if (info->fd > ffsd->maxfd) {
