@@ -51,12 +51,16 @@ static int tcp_connect (struct sockaddr_in *to, int *out_fd);
 static int tcp_serve (nodeid_t *sd, int backlog);
 static int tcp_accept_queue (const nodeid_t *sd);
 static void print_err (int e, const char *msg);
-static int get_peer (dict_t neighbours, struct sockaddr_in *addr);
+static int get_peer (const nodeid_t *self, struct sockaddr_in *addr);
 static inline int would_block (int e);
 static inline int dead_filedescriptor (int e);
 static nodeid_t * addr_to_nodeid (const struct sockaddr_in *addr);
 static int wait_incoming (const nodeid_t *self, struct timeval *tout,
                           fd_set *S, int nfds);
+static int update_neighbours (dict_t neigh, struct sockaddr_in *addr,
+                              int fd);
+static int recv_serv_address (int fd, struct sockaddr_in *out_addr);
+static int send_serv_address (int fd, const struct sockaddr_in *addr);
 
 /* -- Constants ------------------------------------------------------ */
 
@@ -219,10 +223,8 @@ int send_to_peer(const struct nodeID *self, struct nodeID *to,
     assert(local != NULL);          // TODO: remove after testing
     assert(to->local == NULL);      // TODO: ditto
 
-    if (tcp_accept_queue(self) == -1) {
-        return -1;
-    }
-    peer_fd = get_peer(local->neighbours, &to->addr);
+    tcp_accept_queue(self);
+    peer_fd = get_peer(self, &to->addr);
     if (peer_fd == -1) {
         return -1;
     }
@@ -468,7 +470,7 @@ int tcp_accept_queue (const nodeid_t *sd)
 
             default:
                 /* We have an incoming connection, let's accept it and
-                 * store into the neighbors dictionary. */
+                 * store into the neighbours dictionary. */
 
                 len = sizeof(struct sockaddr_in);
                 clifd = accept(servfd, (struct sockaddr *)&incoming,
@@ -477,8 +479,11 @@ int tcp_accept_queue (const nodeid_t *sd)
                     print_err(errno, "accept queue, accept");
                     return -1;
                 }
-                dict_insert(sd->local->neighbours,
-                            (const struct sockaddr *)&incoming, clifd);
+
+                if (update_neighbours(sd->local->neighbours, &incoming,
+                                      clifd) == -1) {
+                    return -1;
+                }
         }
     }
 
@@ -500,9 +505,10 @@ void print_err (int e, const char *msg)
 
 /* TODO: this can be optimized using new features for dictionaries */
 static
-int get_peer (dict_t neighbours, struct sockaddr_in *addr)
+int get_peer (const nodeid_t *self, struct sockaddr_in *addr)
 {
     peer_info_t *peer;
+    dict_t neighbours = self->local->neighbours;
 
     if (dict_lookup(neighbours, (const struct sockaddr *) addr,
                     &peer) == 0) {
@@ -514,7 +520,11 @@ int get_peer (dict_t neighbours, struct sockaddr_in *addr)
         if (tcp_connect(addr, &fd) < 0) {
             return -1;
         }
+
         dict_insert(neighbours, (struct sockaddr *) addr, fd);
+        if (send_serv_address(fd, &self->addr) == -1) {
+            return -1;
+        }
 
         return fd;
     }
@@ -569,6 +579,8 @@ int wait_incoming (const nodeid_t *self, struct timeval *tout, fd_set *S,
     }
 
     do {
+        int err;
+
         was_accept = 0;
         switch (fair_select(local->neighbours, tout, S, nfds + 1,
                             &local->cached_peer, &err)) {
@@ -594,3 +606,61 @@ int wait_incoming (const nodeid_t *self, struct timeval *tout, fd_set *S,
 
     return 1;
 }
+
+static
+int update_neighbours (dict_t neigh, struct sockaddr_in *addr, int fd)
+{
+    struct sockaddr_in neigh_serv;
+
+    if (recv_serv_address(fd, &neigh_serv) == -1) {
+        return -1;
+    }
+
+    dict_insert(neigh, (const struct sockaddr *)addr, fd);
+    dict_insert(neigh, (const struct sockaddr *)&neigh_serv, fd);
+
+    return 0;
+}
+
+static
+int send_serv_address (int fd, const struct sockaddr_in *addr)
+{
+    const uint8_t *buffer;
+    ssize_t size;
+
+    buffer = (const uint8_t *)addr;
+    size = sizeof(struct sockaddr_in);
+    do {
+        ssize_t n = write(fd, (const void *)buffer, size);
+        if (n == -1) {
+            print_err(errno, "sending local server address");
+            return -1;
+        }
+        size -= n;
+        buffer += n;
+    } while (size > 0);
+
+    return 0;
+}
+
+static
+int recv_serv_address (int fd, struct sockaddr_in *out_addr)
+{
+    uint8_t *buffer;
+    ssize_t size;
+
+    buffer = (uint8_t *)out_addr;
+    size = sizeof(struct sockaddr_in);
+    do {
+        ssize_t n = read(fd, (void *)buffer, size);
+        if (n == -1) {
+            print_err(errno, "receiving remote server address");
+            return -1;
+        }
+        size -= n;
+        buffer += n;
+    } while (size > 0);
+
+    return 0;
+}
+
