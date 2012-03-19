@@ -8,7 +8,6 @@
 #include "fair.h"
 
 #include <errno.h>
-#include <fcntl.h>
 
 struct fill_fd_set_data {
     fd_set *readfds;
@@ -25,11 +24,6 @@ dict_scanact_t scan_fill_fd_set (void *ctx, const struct sockaddr *addr,
      * (used by select(2)) and count how much file descriptors have never
      * been used */
     struct fill_fd_set_data *ffsd = ctx;
-
-    if (fcntl(info->fd, F_GETFL) == -1) {
-        /* File descriptor is dead, just remove it */
-        return DICT_SCAN_DEL_CONTINUE;
-    }
 
     FD_SET(info->fd, ffsd->readfds);
     if (info->fd > ffsd->maxfd) {
@@ -115,7 +109,14 @@ int fair_select(dict_t neighbours, struct timeval *timeout,
     struct fill_fd_set_data ffsd;
 
     if (dict_size(neighbours) == 0) {
-        /* If we have no neighbors, just behave as a normal select */
+        /* If we have no neighbors, just behave as a normal select.
+         *
+         * Note: the dictionary may contain invalid file descriptors,
+         * which are transparently removed during the scanning phase.
+         *
+         * If however the size is 0 we are sure that there's nothing in,
+         * so this optimization is perfectly safe.
+         */
         return select(nfds, fdset, NULL, NULL, timeout);
     }
 

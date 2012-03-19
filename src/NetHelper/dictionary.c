@@ -12,6 +12,7 @@
 #include <assert.h>
 #include <string.h>
 #include <unistd.h>
+#include <fcntl.h>
 
 #include "dictionary.h"
 
@@ -21,6 +22,10 @@ static const char * CONF_KEY_NBUCKETS = "tcp_hashbuckets";
 
 // Arbitrary and reasonable(?) prime number.
 static const unsigned DEFAULT_N_BUCKETS = 23;
+
+/* -- Internal functions --------------------------------------------- */
+
+static int invalid_fd (int fd);
 
 /* -- Interface exported symbols ------------------------------------- */
 
@@ -115,8 +120,12 @@ size_t dict_size (dict_t D)
 int dict_lookup (dict_t D, const struct sockaddr *addr,
                  peer_info_t **info)
 {
-    return dhash_search(D->ht, (const void *)addr, (void **)info)
-           == DHASH_FOUND ? 0 : -1;
+    if (dhash_search(D->ht, (const void *)addr, (void **)info)
+            == DHASH_FOUND) {
+        return invalid_fd((*info)->fd) ? -1 : 0;
+    } else {
+        return -1;
+    }
 }
 
 struct lookup_data {
@@ -141,6 +150,12 @@ void dict_lookup_default (dict_t D, const struct sockaddr *addr,
                           peer_info_t *info,
                           int (* make_socket) (void *ctx), void *ctx)
 {
+    /* NOTE: currently this code is NOT used. If enabling this feature,
+     * please double-check the code correctness:
+     *
+     * - is file descriptor valid?
+     * - compare with dict_lookup
+     */
     struct lookup_data ld = {
         .make_socket = make_socket,
         .ctx = ctx
@@ -180,20 +195,38 @@ void dict_scan (dict_t D, dict_scancb_t cback, void *ctx)
     diter_t *it = dhash_iter_new(D->ht);
     int go = 1;
     while (go && diter_hasnext(it)) {
-        dhash_pair_t *P = diter_next(it);
+        dhash_pair_t *P;
+        peer_info_t *info;
 
-        switch (cback(ctx, dhash_key(P), dhash_val(P))) {
-            case DICT_SCAN_DEL_CONTINUE:
-                diter_remove(it, NULL);
-            case DICT_SCAN_CONTINUE:
-                break;
-            case DICT_SCAN_DEL_STOP:
-                diter_remove(it, NULL);
-            case DICT_SCAN_STOP:
-                go = 0;
-                break;
+        P = diter_next(it);
+        info = dhash_val(P);
+
+        if (invalid_fd(info->fd)) {
+            diter_remove(it, NULL);
+            D->count --;
+        } else {
+            switch (cback(ctx, dhash_key(P), info)) {
+                case DICT_SCAN_DEL_CONTINUE:
+                    D->count --;
+                    diter_remove(it, NULL);
+                case DICT_SCAN_CONTINUE:
+                    break;
+                case DICT_SCAN_DEL_STOP:
+                    D->count --;
+                    diter_remove(it, NULL);
+                case DICT_SCAN_STOP:
+                    go = 0;
+                    break;
+            }
         }
     }
     dhash_iter_free(it);
 }
 
+/* -- Internal functions --------------------------------------------- */
+
+static
+int invalid_fd (int fd)
+{
+    return fcntl(fd, F_GETFL) == -1;
+}
