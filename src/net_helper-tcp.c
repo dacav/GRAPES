@@ -184,6 +184,7 @@ struct nodeID * net_helper_init (const char *IPaddr, int port,
         cfg_tags = config_parse(config);
     }
     if (cfg_tags) {
+        /* FIXME: this seems not to work! Testing needed */
         config_value_int_default(cfg_tags, CONF_KEY_BACKLOG, &backlog,
                                  DEFAULT_BACKLOG);
         config_value_int_default(cfg_tags, CONF_KEY_SENDRETRY,
