@@ -230,23 +230,9 @@ int send_to_peer(const struct nodeID *self, struct nodeID *to,
         return -1;
     }
 
-    retry = local->sendretry;
-    sent = 0;
-    while (retry && buffer_size > 0) {
-        ssize_t n = send(peer_fd, buffer_ptr, buffer_size, MSG_DONTWAIT);
-        if (n <= 0) {
-            if (would_block(errno)) {
-                retry --;
-            } else if (dead_filedescriptor(errno)) {
-                dict_remove(local->neighbours, (struct sockaddr *)&to->addr);
-                retry = 0;
-                if (sent == 0) sent = -1;
-            }
-        } else {
-            buffer_ptr += n;
-            sent += n;
-            buffer_size -= n;
-        }
+    sent = send(peer_fd, buffer_ptr, buffer_size, MSG_DONTWAIT);
+    if (sent == -1 && !would_block(errno)) {
+        print_err(errno, "sending");
     }
 
     return sent;
@@ -279,24 +265,16 @@ int recv_from_peer(const struct nodeID *self, struct nodeID **remote,
         return -1;
     }
 
-    retval = 0;
-    while (buffer_size > 0) {
-        ssize_t n;
-
-        switch (n = recv(peer->fd, buffer_ptr, buffer_size, 0)) {
-            case -1:
-                print_err(errno, "receiving");
-            case 0:
-                buffer_size = 0;
-                dict_remove(local->neighbours, peer->addr);
-                break;
-            default:
-                buffer_size -= n;
-                buffer_ptr += n;
-                retval += n;
-        }
+    retval = recv(peer->fd, buffer_ptr, buffer_size, 0);
+    switch (retval) {
+        case -1:
+            print_err(errno, "receiving");
+        case 0:
+            close(peer->fd);
+            break;
+        default:
+            break;
     }
-
     peer->fd = -1;
     return retval;
 }
