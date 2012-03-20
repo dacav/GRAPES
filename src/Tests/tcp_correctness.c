@@ -7,13 +7,14 @@
 #include <stdlib.h>
 #include <string.h>
 
-static const uint16_t START_PORT = 9000;
+static const uint16_t START_PORT = 9500;
+static const size_t BUFSIZE = 30;
 
 static void node0 ()
 {
     struct nodeID *self, *other;
     struct nodeID *remote;
-    char buffer[12];
+    char buffer[BUFSIZE];
     ssize_t N;
 
     self = net_helper_init("127.0.0.1", START_PORT, "");
@@ -28,10 +29,10 @@ static void node0 ()
 
     printf("node0 - sending chip\n");
 
-    N = send_to_peer(self, other, "hello", 6);
+    N = send_to_peer(self, other, "hello", strlen("hello") + 1);
     printf("node0 - sent %i bytes. Are they coming back?\n", (int)N);
 
-    N = recv_from_peer(self, &remote, (void *)buffer, 11);
+    N = recv_from_peer(self, &remote, (void *)buffer, BUFSIZE);
     printf("node0 - recv %i bytes: \"%s\"\n", (int)N, buffer);
 
     nodeid_free(self);
@@ -42,7 +43,7 @@ static void node0 ()
 static void node1 ()
 {
     struct nodeID *self, *other, *remote;
-    char buffer[10];
+    char buffer[BUFSIZE];
     ssize_t N;
     int w4d_ret;
 
@@ -62,7 +63,7 @@ static void node1 ()
     } while (w4d_ret == 0);
 
     printf("node1 - Going receive\n");
-    N = recv_from_peer(self, &remote, (void *)buffer, 6);
+    N = recv_from_peer(self, &remote, (void *)buffer, BUFSIZE);
     assert(buffer[N-1] == 0);
     printf("node1 - Received: \"%s\", now sending twice\n", buffer);
 
