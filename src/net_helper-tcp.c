@@ -28,7 +28,6 @@
 
 typedef struct {
     int fd;
-    int sendretry;              // Number of retry in sending data
     dict_t neighbours;
     connection_t cached_peer;   // Cached during wait4data, used in
                                 // recv_from_peer
@@ -66,9 +65,6 @@ static int send_serv_address (int fd, const struct sockaddr_in *addr);
 
 static const char *   CONF_KEY_BACKLOG = "tcp_backlog";
 static const unsigned DEFAULT_BACKLOG = 50;
-static const char *   CONF_KEY_SENDRETRY = "tcp_send_retry";
-static const int      DEFAULT_SENDRETRY = 3;
-
 static const size_t   ERR_BUFLEN = 64;
 
 /* -- Interface exported symbols ------------------------------------- */
@@ -175,7 +171,6 @@ struct nodeID * net_helper_init (const char *IPaddr, int port,
     }
 
     /* Default settings */
-    local->sendretry = DEFAULT_SENDRETRY;
     backlog = DEFAULT_BACKLOG;
 
     /* Reading settings */
@@ -187,9 +182,6 @@ struct nodeID * net_helper_init (const char *IPaddr, int port,
         /* FIXME: this seems not to work! Testing needed */
         config_value_int_default(cfg_tags, CONF_KEY_BACKLOG, &backlog,
                                  DEFAULT_BACKLOG);
-        config_value_int_default(cfg_tags, CONF_KEY_SENDRETRY,
-                                 &local->sendretry,
-                                 DEFAULT_SENDRETRY);
     }
     local->neighbours = dict_new(AF_INET, 1, cfg_tags);
     local->cached_peer.fd = -1;
