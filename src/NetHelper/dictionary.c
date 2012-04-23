@@ -22,7 +22,6 @@ struct dict {
 static const unsigned DEFAULT_BUCKETS = 17;
 static const char CONF_KEY_BUCKETS[] = "TCPHashBuckets";
 
-static void * dict_data_new (void * ctx);
 static void * dict_data_copy (const void * ptr);
 
 dict_t dict_new (struct tag *cfg)
@@ -67,7 +66,7 @@ client_t dict_search (dict_t d, const sockaddr_t *addr)
     dhash_result_t res;
 
     res = dhash_search_default(d->hash, (const void *)addr, (void **) &cl,
-                               dict_data_new, (void *)addr);
+                               (dcreate_cb_t)client_new, (void *)addr);
     if (res == DHASH_NOTFOUND) {
         d->nelems ++;
     } else if (!client_valid(cl)) {
@@ -99,11 +98,6 @@ void dict_foreach (dict_t d, dict_foreach_t cb, void * ctx)
         }
     }
     dhash_iter_free(iter);
-}
-
-static void * dict_data_new (void * ctx)
-{
-    return (void *) client_new((const sockaddr_t *) ctx);
 }
 
 static void * dict_data_copy (const void * ptr)
