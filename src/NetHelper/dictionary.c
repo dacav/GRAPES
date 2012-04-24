@@ -6,227 +6,106 @@
  */
 
 #include <dacav/dacav.h>
+
 #include <stdlib.h>
-#include <stdio.h>
-#include <stdint.h>
-#include <assert.h>
-#include <string.h>
 #include <unistd.h>
-#include <fcntl.h>
 
+#include "utils.h"
 #include "dictionary.h"
-
-/* -- Constants ------------------------------------------------------ */
-
-static const char * CONF_KEY_NBUCKETS = "tcp_hashbuckets";
-
-// Arbitrary and reasonable(?) prime number.
-static const unsigned DEFAULT_N_BUCKETS = 23;
-
-/* -- Internal functions --------------------------------------------- */
-
-static int invalid_fd (int fd);
-
-/* -- Interface exported symbols ------------------------------------- */
+#include "sockaddr-helpers.h"
 
 struct dict {
-    dhash_t *ht;
-    size_t count;
+    dhash_t *hash;
+    size_t nelems;
 };
 
-static
-uintptr_t sockaddr_hash (const void *key)
-{
-    const struct sockaddr_in *K = key;
-    return K->sin_addr.s_addr + K->sin_port;
-}
+static const unsigned DEFAULT_BUCKETS = 17;
+static const char CONF_KEY_BUCKETS[] = "TCPHashBuckets";
 
-static
-int sockaddr_cmp (const void *v0, const void *v1)
-{
-    return memcmp(v0, v1, sizeof(struct sockaddr_in));
-}
+static void * dict_data_copy (const void * ptr);
+static void * dict_data_new (const void * ptr);
 
-static
-void * create_copy (const void *src, size_t size)
+dict_t dict_new (struct tag *cfg)
 {
-    void * dst = malloc(size);
-    assert(dst != NULL);
-    memcpy(dst, src, size);
-    return dst;
-}
+    dict_t d;
+    int nbuckets;
+    dcprm_t cprm_k;
+    dcprm_t cprm_v;
 
-static
-void * sockaddr_copy (const void *s)
-{
-    return create_copy(s, sizeof(struct sockaddr_in));
-}
-
-static
-void * peer_info_copy (const void *s)
-{
-    return create_copy(s, sizeof(peer_info_t));
-}
-
-static
-void peer_info_free (void *s)
-{
-    close(((peer_info_t *)s)->fd);
-    free(s);
-}
-
-dict_t dict_new (int af, int autoclose, struct tag *cfg_tags)
-{
-    int nbks;
-    dict_t ret;
-    dhash_cprm_t addr_cprm, peer_info_cprm;
-
-    if (af != AF_INET) {
-        fprintf(stderr, "dictionary: Only AF_INET is supported for the"
-                        " moment\n");
-        abort();
+    nbuckets = DEFAULT_BUCKETS;
+    if (cfg) {
+        config_value_int_default(cfg, CONF_KEY_BUCKETS, &nbuckets,
+                                 DEFAULT_BUCKETS);
     }
 
-    nbks = DEFAULT_N_BUCKETS;
-    if (cfg_tags != NULL) {
-        config_value_int_default(cfg_tags, CONF_KEY_NBUCKETS, &nbks,
-                                 DEFAULT_N_BUCKETS);
+    cprm_k.cp = (dcopy_cb_t) sockaddr_dup;
+    cprm_k.rm = free;
+
+    cprm_v.cp = dict_data_copy;
+    cprm_v.rm = (dfree_cb_t) client_del;
+
+    d = mem_new(sizeof(struct dict));
+    d->hash = dhash_new(nbuckets,
+                        (dhash_cb_t) sockaddr_hash,
+                        (dcmp_cb_t) sockaddr_cmp,
+                        &cprm_k, &cprm_v);
+    d->nelems = 0;
+
+    return d;
+}
+
+void dict_del (dict_t d)
+{
+    if (d == NULL) return;
+    dhash_free(d->hash);
+    free(d);
+}
+
+client_t dict_search (dict_t d, const sockaddr_t *addr)
+{
+    client_t cl;
+    dhash_result_t res;
+
+    res = dhash_search_default(d->hash, (const void *)addr, (void **) &cl,
+                               (dcreate_cb_t)dict_data_new, NULL);
+    if (res == DHASH_NOTFOUND) {
+        d->nelems ++;
     }
-
-    ret = malloc(sizeof(struct dict));
-    assert(ret != NULL);
-
-    addr_cprm.cp = sockaddr_copy;
-    addr_cprm.rm = free;
-    peer_info_cprm.cp = peer_info_copy;
-    peer_info_cprm.rm = autoclose ? peer_info_free : free;
-    ret->ht = dhash_new(nbks, sockaddr_hash, sockaddr_cmp,
-                        &addr_cprm, &peer_info_cprm);
-    ret->count = 0;
-    return ret;
+    return cl;
 }
 
-void dict_delete (dict_t D)
+void dict_foreach (dict_t d, dict_foreach_t cb, void * ctx)
 {
-    dhash_free(D->ht);
-    free(D);
-}
+    diter_t *iter;
 
-size_t dict_size (dict_t D)
-{
-    return D->count;
-}
-
-int dict_lookup (dict_t D, const struct sockaddr *addr,
-                 peer_info_t **info)
-{
-    if (dhash_search(D->ht, (const void *)addr, (void **)info)
-            == DHASH_FOUND) {
-        return invalid_fd((*info)->fd) ? -1 : 0;
-    } else {
-        return -1;
-    }
-}
-
-struct lookup_data {
-    int (* make_socket) (void *ctx);
-    void *ctx;
-};
-
-static
-void * build_peer_info (void * param)
-{
-    struct lookup_data *ld = param;
-    peer_info_t * info = malloc(sizeof(peer_info_t));
-
-    assert(info != NULL);
-    info->flags.used = 0;
-    info->fd = ld->make_socket(ld->ctx);
-
-    return (void *)info;
-}
-
-void dict_lookup_default (dict_t D, const struct sockaddr *addr,
-                          peer_info_t *info,
-                          int (* make_socket) (void *ctx), void *ctx)
-{
-    /* NOTE: currently this code is NOT used. If enabling this feature,
-     * please double-check the code correctness:
-     *
-     * - is file descriptor valid?
-     * - compare with dict_lookup
-     */
-    struct lookup_data ld = {
-        .make_socket = make_socket,
-        .ctx = ctx
-    };
-    dhash_search_default(D->ht, (const void *)addr, (void **)&info,
-                         build_peer_info, (void *) &ld);
-}
-
-int dict_insert (dict_t D, const struct sockaddr * addr, int fd)
-{
-    peer_info_t info;
-    info.fd = fd;
-    info.flags.used = 0;
-
-    if (dhash_insert(D->ht, (const void *)addr, (void *)&info)
-            == DHASH_FOUND) {
-        return 1;
-    } else {
-        D->count ++;
-        return 0;
-    }
-}
-
-int dict_remove (dict_t D, const struct sockaddr * addr)
-{
-    if (dhash_delete(D->ht, (const void *)addr, NULL)
-            == DHASH_FOUND) {
-        D->count --;
-        return 0;
-    } else {
-        return -1;
-    }
-}
-
-void dict_scan (dict_t D, dict_scancb_t cback, void *ctx)
-{
-    diter_t *it = dhash_iter_new(D->ht);
-    int go = 1;
-    while (go && diter_hasnext(it)) {
+    if (d->nelems == 0) return;
+    iter = dhash_iter_new(d->hash);
+    while (diter_hasnext(iter)) {
         dhash_pair_t *P;
-        peer_info_t *info;
+        client_t cl;
 
-        P = diter_next(it);
-        info = dhash_val(P);
+        P = diter_next(iter);
+        cl = dhash_val(P);
+        if (!client_valid(cl)) {
+            diter_remove(iter);
+            d->nelems --;
+            continue;
+        }
 
-        if (invalid_fd(info->fd)) {
-            diter_remove(it, NULL);
-            D->count --;
-        } else {
-            switch (cback(ctx, dhash_key(P), info)) {
-                case DICT_SCAN_DEL_CONTINUE:
-                    D->count --;
-                    diter_remove(it, NULL);
-                case DICT_SCAN_CONTINUE:
-                    break;
-                case DICT_SCAN_DEL_STOP:
-                    D->count --;
-                    diter_remove(it, NULL);
-                case DICT_SCAN_STOP:
-                    go = 0;
-                    break;
-            }
+        if (cb(ctx, dhash_key(P), cl) == 0) {
+            break;
         }
     }
-    dhash_iter_free(it);
+    dhash_iter_free(iter);
 }
 
-/* -- Internal functions --------------------------------------------- */
-
-static
-int invalid_fd (int fd)
+static void * dict_data_copy (const void * ptr)
 {
-    return fcntl(fd, F_GETFL) == -1;
+    /* If doing this there's something wrong... */
+    abort();
+}
+
+static void * dict_data_new (const void *ptr)
+{
+    return (void *) client_new();
 }
