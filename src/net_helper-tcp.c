@@ -196,7 +196,9 @@ int send_to_peer(const struct nodeID *self, struct nodeID *to,
     if (!client_valid(cl)) {
         int clfd;
 
-        client_connect(cl, &to->addr);
+        if (client_connect(cl, &to->addr) == -1) {
+            return -1;
+        }
         clfd = client_get_fd(cl);
         if (sockaddr_send_hello(&self->addr, clfd) == -1) {
             close(clfd);
