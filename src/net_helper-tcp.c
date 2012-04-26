@@ -129,8 +129,8 @@ void nodeid_free (struct nodeID *s)
             aqueue_del(local->aqueue);
             free(local);
         }
+        free(s);
     }
-    free(s);
 }
 
 struct nodeID * net_helper_init (const char *ipaddr, int port,
