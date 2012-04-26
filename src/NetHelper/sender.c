@@ -41,7 +41,7 @@ sender_t sender_new ()
 {
     sender_t s;
 
-    s = mem_new(sizeof(sender_t));
+    s = mem_new(sizeof(struct sender));
 
     s->buffer = NULL;
     s->buflen = 0;

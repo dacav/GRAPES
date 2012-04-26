@@ -44,7 +44,7 @@ recver_t recver_new ()
 {
     recver_t r;
 
-    r = mem_new(sizeof(recver_t));
+    r = mem_new(sizeof(struct recver));
 
     r->buffer.bytes = NULL;
     r->buffer.len = 0;
