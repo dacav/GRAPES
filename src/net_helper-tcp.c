@@ -78,12 +78,14 @@ struct nodeID *nodeid_dup (struct nodeID *s)
 */
 int nodeid_cmp (const nodeid_t *s1, const nodeid_t *s2)
 {
+    if (s1 == s2) return 0;
     return sockaddr_cmp(&s1->addr, &s2->addr);
 }
 
 /* @return 1 if the two nodeID are identical or 0 if they are not. */
 int nodeid_equal (const nodeid_t *s1, const nodeid_t *s2)
 {
+    if (s1 == s2) return 1;
     return sockaddr_equal(&s1->addr, &s2->addr);
 }
 
@@ -115,21 +117,20 @@ struct nodeID *create_node (const char *ipaddr, int port)
 
 void nodeid_free (struct nodeID *s)
 {
-    if (s != NULL) {
-        s->refcount --;
+    if (s == NULL) return;
 
-        if (s->refcount == 0) {
-            local_t *local = s->loc;
+    s->refcount --;
+    if (s->refcount == 0) {
+        local_t *local = s->loc;
 
-            if (local != NULL) {
-                dict_del(local->neighbors);
-                if (local->srvfd != -1) close(local->srvfd);
-                aqueue_del(local->aqueue);
-                free(local);
-            }
+        if (local != NULL) {
+            dict_del(local->neighbors);
+            if (local->srvfd != -1) close(local->srvfd);
+            aqueue_del(local->aqueue);
+            free(local);
         }
-        free(s);
     }
+    free(s);
 }
 
 struct nodeID * net_helper_init (const char *ipaddr, int port,
