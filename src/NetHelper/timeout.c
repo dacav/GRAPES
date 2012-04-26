@@ -15,44 +15,67 @@ tout_t tout_new (const struct timeval *timeout)
 {
     tout_t ret;
 
-    ret = mem_new(sizeof(struct tout));
+    if (timeout == NULL) return NULL;
+    else {
+        ret = mem_new(sizeof(struct tout));
+        memcpy((void *)&ret->period, (const void *)timeout,
+               sizeof(struct timeval));
+        tout_reset(ret);
 
-    memcpy((void *)&ret->period, (const void *)timeout,
-           sizeof(struct timeval));
-    tout_reset(ret);
-
-    return ret;
+        return ret;
+    }
 }
 
 tout_t tout_copy (const tout_t t)
 {
-    tout_t ret;
+    if (t == NULL) return NULL;
+    else {
+        tout_t ret;
 
-    ret = mem_dup(t, sizeof(struct tout));
-    tout_reset(ret);
+        ret = mem_dup(t, sizeof(struct tout));
+        tout_reset(ret);
 
-    return ret;
+        return ret;
+    }
 }
 
 void tout_reset (tout_t t)
 {
-    gettimeofday(&t->last_update, NULL);
+    if (t != NULL) {
+        gettimeofday(&t->last_update, NULL);
+    }
 }
 
 int tout_expired (tout_t t)
 {
-    struct timeval now;
-    struct timeval diff;
+    if (t == NULL) return 0;
+    else {
+        struct timeval now;
+        struct timeval diff;
 
-    gettimeofday(&now, NULL);
-    timersub(&now, &t->last_update, &diff);
+        gettimeofday(&now, NULL);
+        timersub(&now, &t->last_update, &diff);
 
-    return timercmp(&diff, &t->period, >);
+        return timercmp(&diff, &t->period, >);
+    }
 }
 
 void tout_del (tout_t t)
 {
     free(t);
+}
+
+struct timeval * tout_remaining (tout_t t, struct timeval *diff)
+{
+    if (t == NULL) return NULL;
+    else {
+        struct timeval now;
+
+        gettimeofday(&now, NULL);
+        timersub(&now, &t->last_update, diff);
+
+        return diff;
+    }
 }
 
 unsigned tout_timeval_to_ms (const struct timeval *tval)

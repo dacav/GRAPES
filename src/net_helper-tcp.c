@@ -5,12 +5,15 @@
  *  This is free software; see lgpl-2.1.txt
  */
 
+#include <stdio.h>
+
 #include <errno.h>
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
 #include <sys/select.h>
+#include <sys/time.h>
 
 #include "net_helper.h"
 #include "config.h"
@@ -18,13 +21,14 @@
 #include "NetHelper/sender.h"
 #include "NetHelper/recver.h"
 #include "NetHelper/dictionary.h"
+#include "NetHelper/timeout.h"
 #include "NetHelper/sockaddr-helpers.h"
-#include "NetHelper/inbox.h"
+#include "NetHelper/async-operations.h"
 
 typedef struct {
     dict_t neighbors;
-    int servfd;
-    inbox_t inbox;
+    int srvfd;
+    aqueue_t aqueue;
 
     unsigned refcount;
 } local_t;
@@ -62,41 +66,6 @@ int tcp_serve (int backlog, sockaddr_t *addr)
     }
 
     return fd;
-}
-
-static
-int accept_connections (dict_t d, int srvfd)
-{
-    fd_set s;
-    int newfd;
-    struct timeval zero = {0,0};
-    socklen_t len;
-    sockaddr_t remote;
-    client_t cl;
-
-    FD_ZERO(&s);
-    FD_SET(srvfd, &s);
-
-    for(;;) {
-        switch (select(srvfd + 1, &s, NULL, NULL, &zero)) {
-            case -1:
-                return -1;
-            case 0:
-                return 0;
-            default:
-                len = sizeof(struct sockaddr_in);
-                newfd = accept(srvfd, &remote.sa, &len);
-                if (newfd == -1) {
-                    print_err("client_accept", "accept", errno);
-                    return -1;
-                }
-                if (sockaddr_recv_hello(&remote, newfd) == -1) {
-                    return -1;
-                }
-                client_set_remote(dict_search(d, &remote),
-                                  &remote, newfd);
-        }
-    }
 }
 
 struct nodeID *nodeid_dup (struct nodeID *s)
@@ -160,8 +129,8 @@ void nodeid_free (struct nodeID *s)
         local->refcount --;
         if (local->refcount == 0) {
             dict_del(local->neighbors);
-            if (local->servfd != -1) close(local->servfd);
-            inbox_del(local->inbox);
+            if (local->srvfd != -1) close(local->srvfd);
+            aqueue_del(local->aqueue);
         }
     }
     free(s);
@@ -198,10 +167,10 @@ struct nodeID * net_helper_init (const char *ipaddr, int port,
     local->neighbors = dict_new(cfg_tags);
     free(cfg_tags);
 
-    local->inbox = inbox_new();
+    local->aqueue = aqueue_new();
     local->refcount = 1;
-    local->servfd = tcp_serve(backlog, &self->addr);
-    if (local->servfd == -1) {
+    local->srvfd = tcp_serve(backlog, &self->addr);
+    if (local->srvfd == -1) {
         nodeid_free(self);
         return NULL;
     }
@@ -228,11 +197,8 @@ int send_to_peer(const struct nodeID *self, struct nodeID *to,
     assert(self->loc != NULL);
 
     loc = self->loc;
-    if (accept_connections(loc->neighbors, loc->servfd) == -1) {
-        return -1;
-    }
-    cl = dict_search(loc->neighbors, &to->addr);
 
+    cl = dict_search(loc->neighbors, &to->addr);
     if (!client_valid(cl)) {
         int clfd;
 
@@ -244,12 +210,12 @@ int send_to_peer(const struct nodeID *self, struct nodeID *to,
         }
     }
 
-    inbox_scan_dict(loc->inbox, loc->neighbors, NULL, &zero);
-    if (client_write(cl, &msg) == -1) {
-        return -1;          /* It might be valid, but busy */
+    if (client_write(cl, &msg) == -1) return -1;
+    if (aqueue_scan_dict(loc->aqueue, loc->neighbors,
+                         loc->srvfd, NULL, &zero) == -1) {
+        return -1;
     }
-    inbox_scan_dict(loc->inbox, loc->neighbors, NULL, &zero);
-    return 0;
+    return buffer_size;
 }
 
 int recv_from_peer(const struct nodeID *self, struct nodeID **remote,
@@ -263,15 +229,14 @@ int recv_from_peer(const struct nodeID *self, struct nodeID **remote,
     assert(self->loc != NULL);
     loc = self->loc;
 
-    if (accept_connections(loc->neighbors, loc->servfd) == -1) {
-        return -1;
-    }
- 
-    while (inbox_empty(loc->inbox)) {
-        inbox_scan_dict(loc->inbox, loc->neighbors, NULL, NULL);
+    while (aqueue_empty(loc->aqueue)) {
+        if (aqueue_scan_dict(loc->aqueue, loc->neighbors, loc->srvfd,
+                             NULL, NULL) == -1) {
+            return -1;
+        }
     }
 
-    sender = inbox_next(loc->inbox);
+    sender = aqueue_next(loc->aqueue);
     msg = client_read(sender);
 
     assert(msg != NULL);
@@ -279,33 +244,36 @@ int recv_from_peer(const struct nodeID *self, struct nodeID **remote,
 
     sender_node = create_node(NULL, 0);
     sockaddr_copy(&sender_node->addr, client_get_remote(sender));
-
     *remote = sender_node;
+
     return (int) msg->size;
 }
 
 int wait4data(const struct nodeID *self, struct timeval *tout,
               int *user_fds)
 {
-    unsigned now, time_limit;
     local_t *loc;
+    struct timeval tmp;
+    int res, ret;
+    tout_t T;
 
     assert(self->loc != NULL);
     loc = self->loc;
 
-    if (accept_connections(loc->neighbors, loc->servfd) == -1) {
-        return -1;
-    }
- 
-    if (!inbox_empty(loc->inbox)) return 1;
-    switch (inbox_scan_dict(loc->inbox, loc->neighbors, user_fds, tout)) {
-        case -1:
+    T = tout_new(tout);
+    ret = 0;
+    while (!tout_expired(T) && aqueue_empty(loc->aqueue)) {
+        res = aqueue_scan_dict(loc->aqueue, loc->neighbors, loc->srvfd,
+                               NULL, tout_remaining(T, &tmp));
+        if (res == -1) {
+            tout_del(T);
             return -1;
-        case 0:
-            return inbox_empty(loc->inbox);
-        case 1:
-            return 1;
+        }
+        ret |= res;
     }
+    tout_del(T);
+
+    return ret || !aqueue_empty(loc->aqueue);
 }
 
 struct nodeID *nodeid_undump (const uint8_t *b, int *len)
