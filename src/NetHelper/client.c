@@ -21,6 +21,7 @@ struct client {
     sockaddr_t remote_addr;
 
     tout_t tout;
+    unsigned flag : 1;
 };
 
 static void set_fd (client_t cl, int fd)
@@ -40,6 +41,7 @@ client_t client_new ()
     cl->fd = -1;
     cl->send = sender_new();
     cl->recv = recver_new();
+    cl->flag = 0;
 
     max_tout.tv_sec = CLIENT_TIMEOUT_MINUTES * 60;
     max_tout.tv_usec = 0;
@@ -124,3 +126,14 @@ const sockaddr_t * client_get_remote (client_t cl)
 {
     return &cl->remote_addr;
 }
+
+int client_get_flag (client_t cl)
+{
+    return cl->flag;
+}
+
+void client_set_flag (client_t cl, int flag)
+{
+    cl->flag = !!flag;
+}
+

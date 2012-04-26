@@ -52,7 +52,8 @@ int collect_callback (void *ctx, const sockaddr_t *addr, client_t cl)
     }
     assert(q->n_active >= 0);
 
-    if (client_has_message(cl)) {
+    if (client_has_message(cl) && client_get_flag(cl) == 0) {
+        client_set_flag(cl, 1);
         q->queue = dlist_append(q->queue, (void *)cl);
     }
     return q->n_active > 0;
@@ -184,6 +185,7 @@ client_t aqueue_next (aqueue_t q)
 
     if (dlist_empty(q->queue)) return NULL;
     q->queue = dlist_pop(q->queue, (void **) &ret);
+    client_set_flag(ret, 0);
     return ret;
 }
 
