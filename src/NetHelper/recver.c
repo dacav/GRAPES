@@ -57,6 +57,7 @@ recver_t recver_new ()
 void recver_del (recver_t r)
 {
     free(r->buffer.bytes);
+    free(r);
 }
 
 recver_state_t recver_state (recver_t r)

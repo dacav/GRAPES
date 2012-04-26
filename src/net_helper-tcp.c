@@ -125,6 +125,7 @@ void nodeid_free (struct nodeID *s)
                 dict_del(local->neighbors);
                 if (local->srvfd != -1) close(local->srvfd);
                 aqueue_del(local->aqueue);
+                free(local);
             }
         }
         free(s);

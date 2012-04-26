@@ -54,6 +54,7 @@ sender_t sender_new ()
 void sender_del (sender_t s)
 {
     free(s->buffer);
+    free(s);
 }
 
 sender_state_t sender_state (sender_t s)
