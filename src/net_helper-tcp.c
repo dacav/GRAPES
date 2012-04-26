@@ -29,11 +29,10 @@ typedef struct {
     dict_t neighbors;
     int srvfd;
     aqueue_t aqueue;
-
-    unsigned refcount;
 } local_t;
 
 typedef struct nodeID {
+    unsigned refcount;
     sockaddr_t addr;
     local_t *loc;
 } nodeid_t;
@@ -70,16 +69,8 @@ int tcp_serve (int backlog, sockaddr_t *addr)
 
 struct nodeID *nodeid_dup (struct nodeID *s)
 {
-    nodeid_t *ret;
-
-    if (s->loc == NULL) {
-        return mem_dup(s, sizeof(struct nodeID));
-    } else {
-        /* This reference counter trick will avoid copying around of the
-         * nodeid for the local host */
-        s->loc->refcount ++;
-        return s;
-    }
+    s->refcount ++;
+    return s;
 }
 
 /*
@@ -117,23 +108,27 @@ struct nodeID *create_node (const char *ipaddr, int port)
     }
 
     ret->loc = NULL;
+    ret->refcount = 1;
 
     return ret;
 }
 
 void nodeid_free (struct nodeID *s)
 {
-    local_t *local = s->loc;
+    if (s != NULL) {
+        s->refcount --;
 
-    if (local != NULL) {
-        local->refcount --;
-        if (local->refcount == 0) {
-            dict_del(local->neighbors);
-            if (local->srvfd != -1) close(local->srvfd);
-            aqueue_del(local->aqueue);
+        if (s->refcount == 0) {
+            local_t *local = s->loc;
+
+            if (local != NULL) {
+                dict_del(local->neighbors);
+                if (local->srvfd != -1) close(local->srvfd);
+                aqueue_del(local->aqueue);
+            }
         }
+        free(s);
     }
-    free(s);
 }
 
 struct nodeID * net_helper_init (const char *ipaddr, int port,
@@ -168,7 +163,6 @@ struct nodeID * net_helper_init (const char *ipaddr, int port,
     free(cfg_tags);
 
     local->aqueue = aqueue_new();
-    local->refcount = 1;
     local->srvfd = tcp_serve(backlog, &self->addr);
     if (local->srvfd == -1) {
         nodeid_free(self);
