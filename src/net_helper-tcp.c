@@ -236,8 +236,11 @@ int recv_from_peer(const struct nodeID *self, struct nodeID **remote,
 
     sender = aqueue_next(loc->aqueue);
     msg = client_read(sender);
-
     assert(msg != NULL);
+
+    if (msg->size > buffer_size) {
+        print_err("recv_from_peer", NULL, ENOBUFS);
+    }
     memcpy((void *)buffer_ptr, msg->data, msg->size);
 
     sender_node = create_node(NULL, 0);
