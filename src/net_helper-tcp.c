@@ -98,15 +98,10 @@ struct nodeID *create_node (const char *ipaddr, int port)
     ret->addr.sa.sa_family = AF_INET;
     sockaddr_set_port(&ret->addr, port);
 
-    if (ipaddr == NULL) {
-        /* In case of server, specifying NULL will allow anyone to
-         * connect. */
-        ret->addr.sin.sin_addr.s_addr = INADDR_ANY;
-    } else if (inet_pton(AF_INET, ipaddr,
-                        (void *)&ret->addr.sin.sin_addr) == 0) {
-        fprintf(stderr, "Invalid ip address %s\n", ipaddr);
-        free(ret);
-        return NULL;
+    if (ipaddr != NULL) {
+        if (sockaddr_in_init(&ret->addr, ipaddr, port) == -1) {
+            return NULL;
+        }
     }
 
     ret->loc = NULL;
@@ -283,8 +278,8 @@ struct nodeID *nodeid_undump (const uint8_t *b, int *len)
     nodeid_t *node;
 
     node = create_node(NULL, 0);
-    sockaddr_undump(&node->addr, sizeof(sockaddr_t), (const void *)b);
-
+    *len = sockaddr_undump(&node->addr, sizeof(sockaddr_t),
+                           (const void *)b);
     return node;
 }
 

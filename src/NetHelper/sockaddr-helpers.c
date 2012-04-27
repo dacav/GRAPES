@@ -162,17 +162,9 @@ int sockaddr_in_init (sockaddr_t *in, const char *ipaddr,
 
     in->sin.sin_family = AF_INET;
     in->sin.sin_port = htons(port);
-
-    /* Initialization of string representation */
-    if (ipaddr == NULL) {
-        /* In case of server, specifying NULL will allow anyone to
-         * connect. */
-        in->sin.sin_addr.s_addr = INADDR_ANY;
-    } else {
-        if (inet_pton(AF_INET, ipaddr, (void *)&in->sin.sin_addr) == 0) {
-            print_err("Initializing sockaddr", "invalid address", 0);
-            return -1;
-        }
+    if (inet_pton(AF_INET, ipaddr, (void *)&in->sin.sin_addr) == 0) {
+        print_err("Initializing sockaddr", "invalid address", 0);
+        return -1;
     }
 
     return 0;
