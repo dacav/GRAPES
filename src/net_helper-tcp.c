@@ -14,6 +14,7 @@
 #include <assert.h>
 #include <sys/select.h>
 #include <sys/time.h>
+#include <unistd.h>
 
 #include "net_helper.h"
 #include "config.h"

@@ -68,7 +68,6 @@ int accept_connections (dict_t d, int srvfd)
     int newfd;
     socklen_t len;
     sockaddr_t remote;
-    client_t cl;
 
     FD_ZERO(&s);
 
