@@ -108,7 +108,13 @@ int client_has_message (client_t cl)
 
 int client_run_recv (client_t cl)
 {
-    return recver_run(cl->recv, cl->fd);
+    int ret = recver_run(cl->recv, cl->fd);
+
+    if (ret == 0) {
+        close(cl->fd);
+        cl->fd = -1;
+    }
+    return ret;
 }
 
 int client_run_send (client_t cl)

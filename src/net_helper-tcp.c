@@ -240,6 +240,7 @@ int recv_from_peer(const struct nodeID *self, struct nodeID **remote,
 
     if (msg->size > buffer_size) {
         print_err("recv_from_peer", NULL, ENOBUFS);
+        return -1;
     }
     memcpy((void *)buffer_ptr, msg->data, msg->size);
 
