@@ -106,6 +106,11 @@ int client_has_message (client_t cl)
     return recver_state(cl->recv) == RECVER_MSG_READY;
 }
 
+int client_requires_sending (client_t cl)
+{
+    return sender_state(cl->send) == SENDER_BUSY;
+}
+
 int client_run_recv (client_t cl)
 {
     int ret = recver_run(cl->recv, cl->fd);

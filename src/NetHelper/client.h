@@ -30,6 +30,8 @@ int client_valid (client_t cl);
 
 int client_has_message (client_t cl);
 
+int client_requires_sending (client_t cl);
+
 int client_get_flag (client_t cl);
 
 void client_set_flag (client_t cl, int flag);

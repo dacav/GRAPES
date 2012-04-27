@@ -26,7 +26,9 @@ int build_sets_callback (void *ctx, const sockaddr_t *addr, client_t cl)
 
     fd = client_get_fd(cl);
     FD_SET(fd, &q->read);
-    FD_SET(fd, &q->write);
+    if (client_requires_sending(cl)) {
+        FD_SET(fd, &q->write);
+    }
     if (fd > q->maxfd) {
         q->maxfd = fd;
     }
