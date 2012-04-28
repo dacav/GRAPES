@@ -23,7 +23,7 @@ $(OBJ_LSTS):
 libgrapes.a: $(OBJ_LSTS) $(COMMON_OBJS)
 	$(AR) rcs libgrapes.a `cat $(OBJ_LSTS)` $(COMMON_OBJS)
 
-NH_TCP_SRCS := $(wildcard NetHelper/*c)
+NH_TCP_SRCS := $(wildcard NetHelper/*c NetHelper/dacav/*c)
 net_helper-tcp.o : net_helper-tcp.c $(NH_TCP_SRCS:.c=.o)
 	$(CC) $(CFLAGS) -I../include -I. -INetHelper/ -c $< -o $@.part
 	ld -r $(NH_TCP_SRCS:.c=.o) $@.part -o $@

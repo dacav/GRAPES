@@ -5,7 +5,7 @@
  *  This is free software; see lgpl-2.1.txt
  */
 
-#include <dacav/dacav.h>
+#include "dacav/dacav.h"
 
 #include <stdlib.h>
 #include <unistd.h>

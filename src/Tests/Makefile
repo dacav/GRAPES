@@ -33,7 +33,7 @@ endif
 CPPFLAGS = -I$(BASE)/include
 
 LDFLAGS += -L..
-LDLIBS += -lgrapes -ldacav
+LDLIBS += -lgrapes
 #LDFLAGS += -static
 
 ifdef DELEGATE
