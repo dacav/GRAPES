@@ -87,7 +87,7 @@ int sender_run (sender_t s, int fd)
     int run;
     ssize_t n;
     size_t size;
-    const void * out;
+    const uint8_t * out;
     state_t next;
 
     run = 1;
@@ -96,18 +96,18 @@ int sender_run (sender_t s, int fd)
             case SND_HEADER:
                 next = SND_MESSAGE;
                 size = sizeof(header_t);
-                out = (void *) &s->hdr;
+                out = (const uint8_t *) &s->hdr;
                 break;
             case SND_MESSAGE:
                 next = SND_IDLE;
                 size = s->buflen;
-                out = s->buffer;
+                out = (const uint8_t *) s->buffer;
                 break;
             default:
                 return 1;
         }
 
-        n = send(fd, out, size - s->sent, 0);
+        n = send(fd, (const void *)(out + s->sent), size - s->sent, 0);
         if (n <= 0) return n;
         s->sent += n;
         if (s->sent == size) {

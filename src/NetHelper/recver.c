@@ -68,6 +68,7 @@ recver_state_t recver_state (recver_t r)
         case RCV_MESSAGE:
             return RECVER_BUSY;
         case RCV_COMPLETE:
+        default:
             return RECVER_MSG_READY;
     }
 }
@@ -94,7 +95,7 @@ int recver_run (recver_t s, int fd)
     while (run) {
         switch (s->state) {
             case RCV_HEADER:
-                n = recv(fd, (void *)&s->hdr,
+                n = recv(fd, (void *)((uint8_t *)&s->hdr + s->recvd),
                          sizeof(header_t) - s->recvd, 0);
                 if (n <= 0) return n;
                 s->recvd += n;
@@ -108,7 +109,8 @@ int recver_run (recver_t s, int fd)
                 }
                 break;
             case RCV_MESSAGE:
-                n = recv(fd, s->buffer.bytes, s->buffer.len - s->recvd, 0);
+                n = recv(fd, (void *)((uint8_t *)s->buffer.bytes + s->recvd),
+                         s->buffer.len - s->recvd, 0);
                 if (n <= 0) return n;
                 s->recvd += n;
                 if (s->recvd == s->buffer.len) {
